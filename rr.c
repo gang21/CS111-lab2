@@ -203,6 +203,8 @@ int main(int argc, char *argv[])
         TAILQ_REMOVE(&list, p, pointers);
         free(p);
         struct process * head = TAILQ_FIRST(&list);
+        printf("Clock: %d - REMOVE: %d, %d, %d, %d\n", clock, head->pid, head->arrival_time, head->burst_time, head->time_left);
+
         head->time_left--;
         current_process_quantum_time = quantum_length;
         current_process_quantum_time--;
