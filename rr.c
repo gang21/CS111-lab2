@@ -143,6 +143,19 @@ void init_processes(const char *path,
   close(fd);
 }
 
+  //switching process function
+void switch_process(struct process_list list) {
+  struct process * r = malloc(sizeof(struct process));
+  struct process * head = TAILQ_FIRST(&list);
+    r->arrival_time = head->arrival_time;
+    r->burst_time = head->burst_time;
+    r->finish_time = head->burst_time;
+    r->pid = head->pid;
+    r->time_left = head->time_left;
+    TAILQ_INSERT_TAIL(&list, r, pointers);
+    TAILQ_REMOVE(&list, head, pointers);
+    free(head);
+}
 int main(int argc, char *argv[])
 {
   if (argc != 3)
@@ -166,22 +179,10 @@ int main(int argc, char *argv[])
   //creating global "clock"
   u32 clock = 0;
   u32 current_process_quantum_time = quantum_length;
-  u32 total_time = data[0].arrival_time;
-  //getting the total amount of time the process should run
-  for(int i = 0; i < size; i++) {
-    total_time += data[i].burst_time;
-  }
-
-  //adding dummy node to queue
-  struct process * dummy = malloc(sizeof(struct process));
-  TAILQ_INSERT_HEAD(&list, dummy, pointers);
+  u32 num_processes_left = size;
 
   //fix this while statement
-  while(clock < total_time) {
-    //removing the dummy node
-    if(TAILQ_FIRST(&list)->pid == 0 && clock == data[0].arrival_time) {
-      TAILQ_REMOVE(&list, TAILQ_FIRST(&list), pointers);
-    }
+  while(num_processes_left > 0) {
     //adding to queue based on arrival time
     for(int i = 0; i < size; i++) {
       if (data[i].arrival_time == clock) {
@@ -200,12 +201,17 @@ int main(int argc, char *argv[])
       //response time update
       //switch processes if finished with current one
       if (p->time_left == 0) {
+        num_processes_left--;
         p->finish_time = clock;
         u32 waiting_time = p->finish_time - p->arrival_time - p->burst_time;
         total_waiting_time += waiting_time;
         // printf("Process %d waiting time: %d\n", p->pid, waiting_time);
         TAILQ_REMOVE(&list, p, pointers);
         free(p);
+        if (TAILQ_EMPTY(&list)) {
+          continue;
+        }
+        //starting new process
         struct process * head = TAILQ_FIRST(&list);
         if (head->time_left == head->burst_time) {
           u32 first_execution = clock;
@@ -213,16 +219,9 @@ int main(int argc, char *argv[])
           total_response_time += response_time;
         }
         // printf("Clock: %d - REMOVE: %d, %d, %d, %d\n", clock, head->pid, head->arrival_time, head->burst_time, head->time_left);
-
         head->time_left--;
-        //last waiting time
-        if (clock + 1 == total_time && head->time_left == 0) {
-          head->finish_time = clock + 1;
-          u32 last_wait = head->finish_time - head->arrival_time - head->burst_time;
-          total_waiting_time += last_wait;
-          // printf("Process %d waiting time: %d\n", head->pid, last_wait);
-        }
-        //last response time
+
+        // last response time
         current_process_quantum_time = quantum_length;
         current_process_quantum_time--;
       }
@@ -247,29 +246,38 @@ int main(int argc, char *argv[])
       r->finish_time = head->burst_time;
       r->pid = head->pid;
       r->time_left = head->time_left;
-      TAILQ_INSERT_TAIL(&list, r, pointers);
+      if (r->time_left > 0) {
+        TAILQ_INSERT_TAIL(&list, r, pointers);
+      }
+      else {
+        num_processes_left--;
+        r->finish_time = clock;
+        u32 waiting_time = r->finish_time - r->arrival_time - r->burst_time;
+        total_waiting_time += waiting_time;
+        // printf("Process %d waiting time: %d\n", r->pid, waiting_time);
+        free(r);
+      }
       TAILQ_REMOVE(&list, head, pointers);
       free(head);
 
-      struct process * temp = TAILQ_FIRST(&list);
+      //making sure queue is not empty
+      if (TAILQ_EMPTY(&list)) {
+        continue;
+      }      
+      struct process * next = TAILQ_FIRST(&list);
       //response time update
-      if (temp->time_left == temp->burst_time) {
+      if (next->time_left == next->burst_time) {
         u32 first_execution = clock;
-        u32 response_time = first_execution - temp->arrival_time;
+        u32 response_time = first_execution - next->arrival_time;
         total_response_time += response_time;
       }
-      // printf("Clock: %d - NEXT: %d, %d, %d, %d\n", clock, temp->pid, temp->arrival_time, temp->burst_time, temp->time_left);
+      // printf("Clock: %d - NEXT: %d, %d, %d, %d\n", clock, next->pid, next->arrival_time, next->burst_time, next->time_left);
 
-      TAILQ_FIRST(&list)->time_left--;
+      next->time_left--;
 
       current_process_quantum_time = quantum_length;
       current_process_quantum_time--;
     }
-
-
-    //print debug - DELETE LATER
-    // struct process * p = TAILQ_FIRST(&list);
-    // printf("Clock: %d - process: %d, %d, %d\n", clock, p->pid, p->arrival_time, p->burst_time);
     clock++;
   }
 
