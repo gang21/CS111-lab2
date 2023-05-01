@@ -22,7 +22,6 @@ struct process
 
   /* Additional fields here */
   u32 finish_time;
-  u32 first_execution;
   u32 time_left;
   /* End of "Additional fields here" */
 };
@@ -165,9 +164,9 @@ int main(int argc, char *argv[])
   /* Your code here */
 
   //creating global "clock"
-  int clock = 0;
-  int current_process_quantum_time = quantum_length;
-  int total_time = data[0].arrival_time;
+  u32 clock = 0;
+  u32 current_process_quantum_time = quantum_length;
+  u32 total_time = data[0].arrival_time;
   //getting the total amount of time the process should run
   for(int i = 0; i < size; i++) {
     total_time += data[i].burst_time;
@@ -198,23 +197,46 @@ int main(int argc, char *argv[])
     if (current_process_quantum_time > 0) {
       //run the current process
       struct process * p = TAILQ_FIRST(&list);
+      //response time update
       //switch processes if finished with current one
       if (p->time_left == 0) {
+        p->finish_time = clock;
+        u32 waiting_time = p->finish_time - p->arrival_time - p->burst_time;
+        total_waiting_time += waiting_time;
+        // printf("Process %d waiting time: %d\n", p->pid, waiting_time);
         TAILQ_REMOVE(&list, p, pointers);
         free(p);
         struct process * head = TAILQ_FIRST(&list);
-        printf("Clock: %d - REMOVE: %d, %d, %d, %d\n", clock, head->pid, head->arrival_time, head->burst_time, head->time_left);
+        if (head->time_left == head->burst_time) {
+          u32 first_execution = clock;
+          u32 response_time = first_execution - head->arrival_time;
+          total_response_time += response_time;
+        }
+        // printf("Clock: %d - REMOVE: %d, %d, %d, %d\n", clock, head->pid, head->arrival_time, head->burst_time, head->time_left);
 
         head->time_left--;
+        //last waiting time
+        if (clock + 1 == total_time && head->time_left == 0) {
+          head->finish_time = clock + 1;
+          u32 last_wait = head->finish_time - head->arrival_time - head->burst_time;
+          total_waiting_time += last_wait;
+          // printf("Process %d waiting time: %d\n", head->pid, last_wait);
+        }
+        //last response time
         current_process_quantum_time = quantum_length;
         current_process_quantum_time--;
       }
       else {
-        printf("Clock: %d - process: %d, %d, %d, %d\n", clock, p->pid, p->arrival_time, p->burst_time, p->time_left);
-        current_process_quantum_time--;
-        p->time_left--;
+        //response time update
+        if (p->time_left == p->burst_time) {
+          u32 first_execution = clock;
+          u32 response_time = first_execution - p->arrival_time;
+          total_response_time += response_time;
+        }
+          // printf("Clock: %d - process: %d, %d, %d, %d\n", clock, p->pid, p->arrival_time, p->burst_time, p->time_left);
+          current_process_quantum_time--;
+          p->time_left--;
       }
-
     }
     //switching processes
     else if (current_process_quantum_time == 0){
@@ -223,7 +245,6 @@ int main(int argc, char *argv[])
       r->arrival_time = head->arrival_time;
       r->burst_time = head->burst_time;
       r->finish_time = head->burst_time;
-      r->first_execution = head->first_execution;
       r->pid = head->pid;
       r->time_left = head->time_left;
       TAILQ_INSERT_TAIL(&list, r, pointers);
@@ -231,9 +252,16 @@ int main(int argc, char *argv[])
       free(head);
 
       struct process * temp = TAILQ_FIRST(&list);
-      printf("Clock: %d - NEXT: %d, %d, %d, %d\n", clock, temp->pid, temp->arrival_time, temp->burst_time, temp->time_left);
+      //response time update
+      if (temp->time_left == temp->burst_time) {
+        u32 first_execution = clock;
+        u32 response_time = first_execution - temp->arrival_time;
+        total_response_time += response_time;
+      }
+      // printf("Clock: %d - NEXT: %d, %d, %d, %d\n", clock, temp->pid, temp->arrival_time, temp->burst_time, temp->time_left);
 
       TAILQ_FIRST(&list)->time_left--;
+
       current_process_quantum_time = quantum_length;
       current_process_quantum_time--;
     }
